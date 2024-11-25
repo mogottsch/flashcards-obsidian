@@ -517,16 +517,47 @@ export class Parser {
     return str.replace(this.regex.wikiAudioLinks, "[sound:$1]");
   }
 
+  /**
+   * Converts math expressions to Anki format while preserving code blocks.
+   * Math within code blocks (```..``` or `..`) should not be converted.
+   */
   private mathToAnki(str: string) {
-    str = str.replace(this.regex.mathBlock, function (match, p1, p2) {
-      return "\\\\[" + escapeMarkdown(p2) + " \\\\]";
+    const blocks = str.split("```");
+
+    const processed = blocks.map((block, index) => {
+      return index % 2 === 0 ? this.convertMathOutsideCodeBlocks(block) : block;
     });
 
-    str = str.replace(this.regex.mathInline, function (match, p1, p2) {
-      return "\\\\(" + escapeMarkdown(p2) + "\\\\)";
+    return processed.join("```");
+  }
+
+  private convertMathOutsideCodeBlocks(block: string): string {
+    block = block.replace(
+      this.regex.mathBlock,
+      (match, p1, p2) => "\\\\[" + escapeMarkdown(p2) + " \\\\]",
+    );
+
+    const lines = block.split("\n");
+    const processedLines = lines.map((line) =>
+      this.convertInlineMathOutsideCode(line),
+    );
+
+    return processedLines.join("\n");
+  }
+
+  private convertInlineMathOutsideCode(line: string): string {
+    const segments = line.split("`");
+
+    const processed = segments.map((segment, index) => {
+      return index % 2 === 0 // Check if the segment is outside an inline code block
+        ? segment.replace(
+            this.regex.mathInline,
+            (match, p1, p2) => "\\\\(" + escapeMarkdown(p2) + "\\\\)",
+          )
+        : segment;
     });
 
-    return str;
+    return processed.join("`");
   }
 
   private parseTags(str: string, globalTags: string[]): string[] {
